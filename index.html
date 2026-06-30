@@ -271,7 +271,11 @@ function updateFish(f, dt){
   if(seeing){
     dx = target.x-f.x; dy = target.y-f.y;
     const m = Math.hypot(dx,dy)||1; dx/=m; dy/=m; boost=1.6;
-    if(m < f.L*0.45 && f.eat<=0){            // 먹기
+    // 입(머리 앞) 위치 — 진행 방향 앞쪽으로 잡아 머리로만 먹게
+    const sp0 = Math.hypot(f.vx,f.vy)||1;
+    const mxp = f.x + (f.vx/sp0)*f.L*0.44;
+    const myp = f.y + (f.vy/sp0)*f.L*0.44;
+    if((target.x-mxp)**2 + (target.y-myp)**2 < (f.L*0.30)**2 && f.eat<=0){   // 입으로 먹기
       const i=food.indexOf(target); if(i>=0) food.splice(i,1);
       f.eat=0.4;
       for(let k=0;k<4;k++) bubbles.push(makeBubble(target.x+rand(-4,4), target.y, rand(1,2.4)));
@@ -314,7 +318,7 @@ function drawFish(f){
   const sc = lerp(0.6,1.15,z);
   const L = f.L, Hh = f.Hh;
   const dir = f.vx < 0 ? -1 : 1;
-  const tilt = clamp(Math.atan2(f.vy, Math.abs(f.vx)+1)*0.55, -0.5, 0.5) * dir;
+  const tilt = clamp(Math.atan2(f.vy, Math.abs(f.vx)+1)*0.62, -0.7, 0.7) * dir;
   const bend = Math.sin(f.phase) * Hh * 0.22 * M;
   const wag  = Math.sin(f.phase + 0.7);
 
@@ -824,12 +828,13 @@ function makeLoach(){
   return lf;
 }
 function updateLoach(lf,dt){
-  // 바닥의 먹이를 향해 기어가 뜯어먹기
+  // 바닥의 먹이를 향해 기어가 입으로 뜯어먹기
   let target=null,best=1e9;
   for(const p of food){ if(p.y>sandTop-30){ const d=(p.x-lf.x)**2+(p.y-lf.y)**2; if(d<best){best=d;target=p;} } }
   const seesFood = target && best<260*260;
   if(seesFood){ lf.state='graze'; lf.tx=target.x; lf.ty=Math.min(target.y,H-10);
-    if(best<(lf.L*0.4)**2){ const i=food.indexOf(target); if(i>=0)food.splice(i,1); lf.nibble=0.5; lf.timer=rand(1,3);} }
+    const mx=lf.x+Math.cos(lf.heading)*lf.L*0.30, my=lf.y+Math.sin(lf.heading)*lf.L*0.30;   // 입 위치
+    if((target.x-mx)**2+(target.y-my)**2 < (lf.L*0.24)**2){ const i=food.indexOf(target); if(i>=0)food.splice(i,1); lf.nibble=0.5; lf.timer=rand(1,3);} }
 
   lf.timer-=dt;
   if(!seesFood && lf.timer<=0){
@@ -857,7 +862,11 @@ function updateLoach(lf,dt){
 
   const sp=Math.hypot(lf.vx,lf.vy);
   let desired;
-  if(sp>14){ desired=Math.atan2(lf.vy,lf.vx); lf.grip+=(0.3-lf.grip)*Math.min(1,dt*4); }      // 이동 방향
+  if(seesFood){                                                        // 먹이를 똑바로 바라봄
+    const ddx=lf.tx-lf.x, ddy=lf.ty-lf.y;
+    desired = (ddx*ddx+ddy*ddy>9) ? Math.atan2(ddy,ddx) : lf.heading;
+    lf.grip+=(0.6-lf.grip)*Math.min(1,dt*3);
+  } else if(sp>14){ desired=Math.atan2(lf.vy,lf.vx); lf.grip+=(0.3-lf.grip)*Math.min(1,dt*4); }   // 이동 방향
   else { desired=Math.PI+Math.sin(time*0.3+lf.phase)*0.22; lf.grip+=(1-lf.grip)*Math.min(1,dt*3); } // 물살 거슬러 정지
   let dh=((desired-lf.heading+Math.PI*3)%TAU)-Math.PI;
   lf.heading+=dh*Math.min(1,dt*(sp>14?6:2));
