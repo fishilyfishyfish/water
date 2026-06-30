@@ -271,11 +271,14 @@ function updateFish(f, dt){
   if(seeing){
     dx = target.x-f.x; dy = target.y-f.y;
     const m = Math.hypot(dx,dy)||1; dx/=m; dy/=m; boost=1.6;
-    // 입(머리 앞) 위치 — 진행 방향 앞쪽으로 잡아 머리로만 먹게
-    const sp0 = Math.hypot(f.vx,f.vy)||1;
-    const mxp = f.x + (f.vx/sp0)*f.L*0.44;
-    const myp = f.y + (f.vy/sp0)*f.L*0.44;
-    if((target.x-mxp)**2 + (target.y-myp)**2 < (f.L*0.30)**2 && f.eat<=0){   // 입으로 먹기
+    // 그려지는 '머리(입)' 위치와 동일하게 계산 → 머리 앞쪽일 때만 먹기 (뒤로는 못 먹음)
+    const fdir = f.vx<0?-1:1;
+    const ft = clamp(Math.atan2(f.vy,Math.abs(f.vx)+1)*0.62,-0.7,0.7)*fdir;
+    const fsc = lerp(0.6,1.15,f.z);
+    const ox = Math.cos(ft)*f.L*0.46*fdir*fsc, oy = Math.sin(ft)*f.L*0.46*fsc;   // 입 오프셋
+    const ahead = dx*ox + dy*oy > 0;                                             // 먹이가 머리 앞?
+    const dMouth = (target.x-(f.x+ox))**2 + (target.y-(f.y+oy))**2;
+    if(ahead && dMouth < (f.L*0.32*fsc)**2 && f.eat<=0){                         // 입으로만 먹기
       const i=food.indexOf(target); if(i>=0) food.splice(i,1);
       f.eat=0.4;
       for(let k=0;k<4;k++) bubbles.push(makeBubble(target.x+rand(-4,4), target.y, rand(1,2.4)));
@@ -834,7 +837,8 @@ function updateLoach(lf,dt){
   const seesFood = target && best<260*260;
   if(seesFood){ lf.state='graze'; lf.tx=target.x; lf.ty=Math.min(target.y,H-10);
     const mx=lf.x+Math.cos(lf.heading)*lf.L*0.30, my=lf.y+Math.sin(lf.heading)*lf.L*0.30;   // 입 위치
-    if((target.x-mx)**2+(target.y-my)**2 < (lf.L*0.24)**2){ const i=food.indexOf(target); if(i>=0)food.splice(i,1); lf.nibble=0.5; lf.timer=rand(1,3);} }
+    const ahead=Math.cos(lf.heading)*(target.x-lf.x)+Math.sin(lf.heading)*(target.y-lf.y) > 0;
+    if(ahead && (target.x-mx)**2+(target.y-my)**2 < (lf.L*0.24)**2){ const i=food.indexOf(target); if(i>=0)food.splice(i,1); lf.nibble=0.5; lf.timer=rand(1,3);} }
 
   lf.timer-=dt;
   if(!seesFood && lf.timer<=0){
