@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>물멍 · 잔잔한 수조</title>
+<style>
+  :root{
+    --water-top:#6fc6c3;
+    --water-deep:#123f54;
+    --ink:#eaf6f4;
+    --ink-soft:rgba(234,246,244,.62);
+    --glass:rgba(8,38,48,.42);
+    --glass-line:rgba(180,230,225,.18);
+    --accent:#7fd6cf;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden}
+  body{
+    background:linear-gradient(180deg,var(--water-top),#236a78 45%,var(--water-deep));
+    font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    touch-action:none;
+  }
+  #tank{position:fixed;inset:0;display:block;width:100%;height:100%}
+
+  /* ── 오버레이: 기본은 클릭 통과, 실제 컨트롤만 클릭 가능 ── */
+  #ui{position:fixed;inset:0;pointer-events:none;z-index:5}
+
+  .title{
+    position:absolute;top:clamp(18px,4vh,40px);left:clamp(20px,4vw,44px);
+    transition:opacity 1.4s ease;
+  }
+  .title h1{
+    margin:0;font-size:clamp(22px,3.4vw,34px);font-weight:300;
+    letter-spacing:.42em;text-indent:.42em;
+    text-shadow:0 2px 18px rgba(0,30,40,.45);
+  }
+  .title p{
+    margin:.5em 0 0;font-size:clamp(11px,1.4vw,13px);font-weight:300;
+    letter-spacing:.14em;color:var(--ink-soft);
+  }
+  .title.dim{opacity:0}
+
+  .hint{
+    position:absolute;left:50%;bottom:clamp(24px,5vh,48px);transform:translateX(-50%);
+    font-size:13px;font-weight:300;letter-spacing:.08em;color:var(--ink-soft);
+    background:rgba(8,38,48,.3);padding:.5em 1.1em;border-radius:999px;
+    border:1px solid var(--glass-line);backdrop-filter:blur(6px);
+    transition:opacity 1s ease;
+  }
+  .hint.dim{opacity:0}
+
+  /* ── 컨트롤 패널 ── */
+  .dock{
+    position:absolute;right:clamp(16px,3vw,28px);bottom:clamp(16px,3vh,28px);
+    display:flex;flex-direction:column;align-items:flex-end;gap:12px;
+    pointer-events:none;
+  }
+  .toggle{
+    pointer-events:auto;width:46px;height:46px;border-radius:50%;
+    background:var(--glass);border:1px solid var(--glass-line);
+    backdrop-filter:blur(10px);cursor:pointer;color:var(--ink);
+    display:grid;place-items:center;transition:transform .25s ease,background .25s ease;
+  }
+  .toggle:hover{background:rgba(12,52,64,.6);transform:translateY(-1px)}
+  .toggle svg{width:22px;height:22px;opacity:.9}
+
+  .panel{
+    pointer-events:auto;width:236px;padding:18px 18px 16px;
+    background:var(--glass);border:1px solid var(--glass-line);
+    border-radius:18px;backdrop-filter:blur(14px);
+    box-shadow:0 18px 50px rgba(0,20,30,.35);
+    opacity:0;transform:translateY(8px) scale(.98);transform-origin:bottom right;
+    transition:opacity .3s ease,transform .3s ease;pointer-events:none;
+  }
+  .panel.open{opacity:1;transform:none;pointer-events:auto}
+  .row{margin-bottom:15px}
+  .row:last-child{margin-bottom:0}
+  .row label{display:flex;justify-content:space-between;font-size:12px;font-weight:300;
+    letter-spacing:.04em;color:var(--ink-soft);margin-bottom:7px}
+  .row label b{color:var(--ink);font-weight:400}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:4px;
+    background:rgba(220,245,242,.22);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:15px;height:15px;border-radius:50%;
+    background:var(--accent);border:2px solid rgba(8,38,48,.8);
+    box-shadow:0 1px 6px rgba(0,0,0,.3);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:15px;height:15px;border-radius:50%;background:var(--accent);
+    border:2px solid rgba(8,38,48,.8);
+  }
+  .snd{
+    width:100%;padding:9px;border-radius:11px;cursor:pointer;font-size:12px;
+    letter-spacing:.05em;color:var(--ink);background:rgba(220,245,242,.08);
+    border:1px solid var(--glass-line);transition:background .2s ease;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+  }
+  .snd:hover{background:rgba(220,245,242,.16)}
+  .snd.on{background:rgba(127,214,207,.2);border-color:rgba(127,214,207,.4)}
+  .snd .dot{width:7px;height:7px;border-radius:50%;background:var(--ink-soft);transition:.2s}
+  .snd.on .dot{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+
+  .toast{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.96);
+    font-size:clamp(17px,2.4vw,23px);font-weight:300;letter-spacing:.18em;
+    color:#eafff9;text-align:center;text-shadow:0 2px 22px rgba(0,40,40,.55);
+    opacity:0;transition:opacity .8s ease,transform .8s ease;pointer-events:none;
+  }
+  .toast small{display:block;margin-top:.7em;font-size:.58em;font-weight:300;
+    letter-spacing:.1em;color:var(--ink-soft)}
+  .toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  @media (max-width:520px){ .panel{width:208px} .title h1{letter-spacing:.32em} }
+</style>
+</head>
+<body>
+  <canvas id="tank" aria-label="물고기들이 헤엄치는 잔잔한 수조 애니메이션"></canvas>
+
+  <div id="ui">
+    <div class="title" id="title">
+      <h1>물멍</h1>
+      <p>가만히 바라보는 시간</p>
+    </div>
+
+    <div class="hint" id="hint">화면을 살짝 누르면 먹이를 줄 수 있어요</div>
+    <div class="toast" id="toast"></div>
+
+    <div class="dock">
+      <div class="panel" id="panel">
+        <div class="row">
+          <label>물고기 <b id="vFish">26</b></label>
+          <input id="sFish" type="range" min="6" max="60" value="26" />
+        </div>
+        <div class="row">
+          <label>헤엄 속도 <b id="vSpeed">1.0×</b></label>
+          <input id="sSpeed" type="range" min="3" max="20" value="10" />
+        </div>
+        <div class="row">
+          <label>물빛 <b id="vLight">보통</b></label>
+          <input id="sLight" type="range" min="0" max="15" value="10" />
+        </div>
+        <div class="row" style="margin-bottom:0">
+          <button class="snd" id="bSnd" aria-pressed="false">
+            <span class="dot"></span><span id="sndTxt">물소리 켜기</span>
+          </button>
+        </div>
+      </div>
+      <button class="toggle" id="toggle" aria-label="설정 열기" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M4 7c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2"/>
+          <path d="M4 13c2 0 2 2 4 2s2-2 4-2 2 2 4 2 2-2 4-2"/>
+          <path d="M4 19c2 0 2 1.6 4 1.6"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────────────────────
+//  물멍 — 잔잔한 수조  (vanilla JS, single file)
+// ─────────────────────────────────────────────────────────────
+const canvas = document.getElementById('tank');
+const ctx = canvas.getContext('2d', { alpha:false });
+
+let W = 0, H = 0, DPR = 1;
+let sandTop = 0, sandH = 0;
+let time = 0;
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const M = reduceMotion ? 0.5 : 1;            // 모션 강도
+
+const cfg = { fishCount:26, speed:1, light:1 };
+
+// ── 유틸 ──
+const rand  = (a,b) => a + Math.random()*(b-a);
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp  = (a,b,t) => a + (b-a)*t;
+const TAU   = Math.PI*2;
+
+// ── 급류(Hillstream) 모드 상태 ──
+const TANK   = { top:'#73cac6', mid:'#2a8390', deep:'#0f3a4e' };  // 잔잔한 수조
+const STREAM = { top:'#a9e7df', mid:'#56bccd', deep:'#2c7a8e' };  // 맑고 차가운 급류
+let modeT=0, targetMode=0, flow=0; const FLOW_MAX=62;             // modeT: 0=수조, 1=급류
+let hillstream=false;
+let loaches=[], streamRocks=[], pebbles=[], mosses=[], streaks=[];
+// 길게 누르기(이스터에그) 상태 — 짧은 탭=먹이, 길게=급류 토글
+let press={active:false,x:0,y:0,t0:0,fired:false,moved:false,ring:0};
+const HOLD_MS=750, MOVE_TOL=14;
+function hx(c){ return [parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)]; }
+function hexLerp(a,b,t){ const A=hx(a),B=hx(b);
+  return `rgb(${Math.round(lerp(A[0],B[0],t))},${Math.round(lerp(A[1],B[1],t))},${Math.round(lerp(A[2],B[2],t))})`; }
+
+// ── 물고기 종 정의 ──  [머리색, 꼬리색, 지느러미색]
+const TYPES = [
+  { key:'tetra',  w:6, lMin:22, lMax:34, h:0.42, c1:'#8fd2ef', c2:'#e87a9a', fin:'rgba(205,232,246,.5)',  spd:[26,42], dorsal:0.8 },
+  { key:'gold',   w:4, lMin:40, lMax:58, h:0.50, c1:'#f7d473', c2:'#e7a431', fin:'rgba(247,212,115,.5)',  spd:[20,34], dorsal:1.1 },
+  { key:'coral',  w:4, lMin:42, lMax:62, h:0.52, c1:'#f5a877', c2:'#df6740', fin:'rgba(245,168,119,.5)',  spd:[20,34], dorsal:1.05 },
+  { key:'pearl',  w:3, lMin:34, lMax:50, h:0.46, c1:'#f4eee1', c2:'#cbb89e', fin:'rgba(244,238,225,.5)',  spd:[22,36], dorsal:0.9 },
+  { key:'violet', w:2, lMin:50, lMax:70, h:0.50, c1:'#b39adb', c2:'#7a5fae', fin:'rgba(179,154,219,.5)',  spd:[16,28], dorsal:1.2 },
+  { key:'loach',  w:2, lMin:72, lMax:98, h:0.24, c1:'#c8ad7d', c2:'#8a6f4c', fin:'rgba(200,174,124,.42)', spd:[14,24], dorsal:0.4, bottom:true },
+];
+const TYPE_TOTAL = TYPES.reduce((s,t)=>s+t.w,0);
+function pickType(){
+  let r = Math.random()*TYPE_TOTAL;
+  for(const t of TYPES){ if((r-=t.w) <= 0) return t; }
+  return TYPES[0];
+}
+
+// ── 엔티티 저장소 ──
+let fish = [], plants = [], rocks = [], rays = [], plankton = [], bubbles = [], food = [], ripples = [];
+let emitters = [];
+
+// ── 물고기 ──
+function makeFish(type){
+  const t = type || pickType();
+  const L = rand(t.lMin, t.lMax);
+  const Hh = L * t.h;
+  const z  = t.bottom ? rand(0.55,0.95) : rand(0.25,1);   // 원근(깊이)
+  const f = {
+    t, L, Hh, z,
+    x: rand(0, W), y: 0,
+    vx: rand(-1,1)*20, vy: rand(-1,1)*6,
+    cruise: rand(t.spd[0], t.spd[1]),
+    phase: rand(0,TAU), finPhase: rand(0,TAU),
+    wDir: rand(0,TAU), wTimer: rand(0,3),
+    eat: 0,
+    bodyGrad:null, bellyGrad:null,
+  };
+  f.y = t.bottom ? rand(sandTop - Hh*1.4, sandTop - Hh*0.4)
+                 : rand(H*0.12, sandTop - Hh);
+  // 로컬 좌표가 고정이므로 그라데이션 캐싱
+  f.bodyGrad = ctx.createLinearGradient(L*0.5,0,-L*0.5,0);
+  f.bodyGrad.addColorStop(0, t.c1);
+  f.bodyGrad.addColorStop(1, t.c2);
+  f.bellyGrad = ctx.createLinearGradient(0,-Hh,0,Hh);
+  f.bellyGrad.addColorStop(0,'rgba(255,255,255,0)');
+  f.bellyGrad.addColorStop(1,'rgba(255,255,255,.16)');
+  return f;
+}
+
+function buildBody(L,Hh,bend){
+  ctx.beginPath();
+  ctx.moveTo(L*0.48, 0);
+  ctx.bezierCurveTo(L*0.30,-Hh, -L*0.10,-Hh*0.92, -L*0.40,-Hh*0.16 + bend);
+  ctx.bezierCurveTo(-L*0.46,-Hh*0.05 + bend, -L*0.46, Hh*0.05 + bend, -L*0.40, Hh*0.16 + bend);
+  ctx.bezierCurveTo(-L*0.10, Hh*0.92, L*0.30, Hh, L*0.48, 0);
+  ctx.closePath();
+}
+
+function updateFish(f, dt){
+  const zSpd = lerp(0.65,1.1,f.z);
+  const cruise = f.cruise * cfg.speed * zSpd * (reduceMotion?0.6:1);
+
+  // 먹이 탐색
+  let target=null, best=1e9;
+  for(const p of food){
+    const d=(p.x-f.x)**2 + (p.y-f.y)**2;
+    if(d<best){best=d;target=p;}
+  }
+  const seeing = target && best < 240*240;
+
+  let dx, dy, boost=1;
+  if(seeing){
+    dx = target.x-f.x; dy = target.y-f.y;
+    const m = Math.hypot(dx,dy)||1; dx/=m; dy/=m; boost=1.6;
+    if(m < f.L*0.45 && f.eat<=0){            // 먹기
+      const i=food.indexOf(target); if(i>=0) food.splice(i,1);
+      f.eat=0.4;
+      for(let k=0;k<4;k++) bubbles.push(makeBubble(target.x+rand(-4,4), target.y, rand(1,2.4)));
+    }
+  } else {
+    // 배회
+    f.wTimer -= dt;
+    if(f.wTimer<=0){ f.wDir = Math.atan2(f.vy,f.vx) + rand(-0.9,0.9); f.wTimer = rand(1.6,4); }
+    dx = Math.cos(f.wDir); dy = Math.sin(f.wDir);
+    if(f.t.bottom) dy = dy*0.25 + 0.04;       // 바닥종은 수평 위주
+  }
+
+  // 경계 회피
+  const mg = 70;
+  if(f.x < mg) dx += (mg-f.x)/mg * 1.4;
+  if(f.x > W-mg) dx -= (f.x-(W-mg))/mg * 1.4;
+  const topLim = f.t.bottom ? sandTop - f.Hh*2.4 : H*0.10;
+  const botLim = sandTop - f.Hh*0.7;
+  if(f.y < topLim) dy += (topLim-f.y)/mg * 1.4;
+  if(f.y > botLim) dy -= (f.y-botLim)/mg * 1.6;
+
+  const m = Math.hypot(dx,dy)||1; dx/=m; dy/=m;
+  const tvx = dx*cruise*boost, tvy = dy*cruise*boost;
+  const turn = Math.min(1, (seeing?2.4:1.4)*dt);
+  f.vx += (tvx-f.vx)*turn;
+  f.vy += (tvy-f.vy)*turn;
+
+  f.x += f.vx*dt; f.y += f.vy*dt;
+  f.eat = Math.max(0, f.eat-dt);
+  if(modeT>0.01) f.x += flow*0.4*dt;          // 물살에 떠밀려 감
+  f.x = clamp(f.x,-60,W+60);
+
+  const sp = Math.hypot(f.vx,f.vy);
+  f.phase += dt*(3 + sp*0.09);
+  f.finPhase += dt*4;
+}
+
+function drawFish(f){
+  const z = f.z;
+  const sc = lerp(0.6,1.15,z);
+  const L = f.L, Hh = f.Hh;
+  const dir = f.vx < 0 ? -1 : 1;
+  const tilt = clamp(Math.atan2(f.vy, Math.abs(f.vx)+1)*0.55, -0.5, 0.5) * dir;
+  const bend = Math.sin(f.phase) * Hh * 0.22 * M;
+  const wag  = Math.sin(f.phase + 0.7);
+
+  ctx.save();
+  ctx.globalAlpha = lerp(0.5,1,z) * (1-modeT);
+  ctx.translate(f.x, f.y);
+  ctx.scale(dir*sc, sc);
+  ctx.rotate(tilt*dir);
+
+  // 꼬리지느러미 (몸 뒤)
+  const tx=-L*0.40, ty=bend;
+  ctx.beginPath();
+  ctx.moveTo(tx,ty);
+  ctx.quadraticCurveTo(-L*0.60, ty-Hh*0.85+wag*Hh*0.55, -L*0.56, ty-Hh*0.6+wag*Hh*0.8);
+  ctx.quadraticCurveTo(-L*0.66, ty+wag*Hh*1.0, -L*0.56, ty+Hh*0.6+wag*Hh*0.8);
+  ctx.quadraticCurveTo(-L*0.60, ty+Hh*0.85+wag*Hh*0.55, tx,ty);
+  ctx.closePath();
+  ctx.fillStyle = f.t.fin; ctx.fill();
+
+  // 등지느러미
+  ctx.beginPath();
+  ctx.moveTo(L*0.14,-Hh*0.78);
+  ctx.quadraticCurveTo(-L*0.02,-Hh*(0.9+0.7*f.t.dorsal), -L*0.20,-Hh*0.7);
+  ctx.lineTo(-L*0.18,-Hh*0.18); ctx.closePath();
+  ctx.fillStyle = f.t.fin; ctx.fill();
+
+  // 가슴지느러미 (살랑)
+  ctx.save();
+  ctx.translate(L*0.16, Hh*0.22);
+  ctx.rotate(Math.sin(f.finPhase)*0.35 + 0.5);
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(L*0.14, Hh*0.2, L*0.04, Hh*0.5);
+  ctx.quadraticCurveTo(-L*0.02, Hh*0.25, 0,0);
+  ctx.closePath();
+  ctx.fillStyle = f.t.fin; ctx.fill();
+  ctx.restore();
+
+  // 몸통 (그라데이션 + 배 하이라이트)
+  buildBody(L,Hh,bend);
+  ctx.fillStyle = f.bodyGrad; ctx.fill();
+  ctx.fillStyle = f.bellyGrad; ctx.fill();
+  ctx.lineWidth = 0.6; ctx.strokeStyle = 'rgba(0,25,30,.12)'; ctx.stroke();
+
+  // 눈
+  ctx.beginPath(); ctx.arc(L*0.30,-Hh*0.12, Hh*0.17, 0, TAU);
+  ctx.fillStyle='#f7faf9'; ctx.fill();
+  ctx.beginPath(); ctx.arc(L*0.315,-Hh*0.12, Hh*0.10, 0, TAU);
+  ctx.fillStyle='#13242a'; ctx.fill();
+  ctx.beginPath(); ctx.arc(L*0.345,-Hh*0.16, Hh*0.035, 0, TAU);
+  ctx.fillStyle='rgba(255,255,255,.9)'; ctx.fill();
+
+  ctx.restore();
+}
+
+// ── 수초 ──
+function makePlants(){
+  plants = [];
+  const clusters = Math.round(W/200) + 2;
+  for(let c=0;c<clusters;c++){
+    const cx = (c+0.5)/clusters * W + rand(-40,40);
+    const blades = Math.round(rand(3,6));
+    const tall = rand(0.34,0.6);
+    const hue = rand(0,1);
+    for(let b=0;b<blades;b++){
+      plants.push({
+        x: cx + rand(-26,26),
+        y: sandTop + rand(-4,8),
+        h: H*tall*rand(0.7,1.1),
+        w: rand(9,17),
+        seg: 10,
+        phase: rand(0,TAU),
+        sway: rand(10,22),
+        curve: rand(-30,30),
+        cDeep: hue<0.5 ? '#235f3c' : '#2c6d3f',
+        cLight: hue<0.5 ? '#6fbf63' : '#84c96f',
+        front: false,
+      });
+    }
+  }
+  // 앞쪽 큰 수초 한 무리 (깊이감)
+  const fcx = rand(W*0.1, W*0.9);
+  for(let b=0;b<4;b++){
+    plants.push({
+      x: fcx + rand(-30,30), y: sandTop + rand(0,10),
+      h: H*rand(0.5,0.72), w: rand(16,26), seg:11,
+      phase: rand(0,TAU), sway: rand(14,24), curve: rand(-40,40),
+      cDeep:'#1d5234', cLight:'#5cae57', front:true,
+    });
+  }
+}
+
+function drawPlant(p){
+  const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y - p.h);
+  grad.addColorStop(0, p.cDeep);
+  grad.addColorStop(1, p.cLight);
+  const left=[], right=[];
+  for(let i=0;i<=p.seg;i++){
+    const t=i/p.seg;
+    const sway = Math.sin(time*0.8 + p.phase + t*2.1) * p.sway * t * M;
+    const x = p.x + sway + p.curve*t*t;
+    const y = p.y - p.h*t;
+    const w = p.w*(1-t)*0.5 + 0.6;
+    left.push([x-w,y]); right.push([x+w,y]);
+  }
+  ctx.beginPath();
+  ctx.moveTo(left[0][0],left[0][1]);
+  for(let i=1;i<left.length;i++) ctx.lineTo(left[i][0],left[i][1]);
+  for(let i=right.length-1;i>=0;i--) ctx.lineTo(right[i][0],right[i][1]);
+  ctx.closePath();
+  ctx.globalAlpha = (p.front ? 0.92 : 0.8) * (1-modeT);
+  ctx.fillStyle = grad; ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// ── 돌 ──
+function makeRocks(){
+  rocks = [];
+  const n = Math.round(rand(3,5));
+  for(let i=0;i<n;i++){
+    const w = rand(60,150), h = rand(24,52);
+    rocks.push({ x: rand(0,W), y: sandTop + rand(-2,14), w, h,
+                 tone: rand(0,1)<0.5 ? '#4a5560' : '#5a5750' });
+  }
+}
+function drawRock(r){
+  const g = ctx.createLinearGradient(0, r.y-r.h, 0, r.y+6);
+  g.addColorStop(0, r.tone);
+  g.addColorStop(1, '#2c343c');
+  ctx.beginPath();
+  ctx.moveTo(r.x-r.w/2, r.y+4);
+  ctx.bezierCurveTo(r.x-r.w*0.4, r.y-r.h, r.x-r.w*0.1, r.y-r.h, r.x, r.y-r.h*0.92);
+  ctx.bezierCurveTo(r.x+r.w*0.2, r.y-r.h, r.x+r.w*0.45, r.y-r.h*0.6, r.x+r.w/2, r.y+4);
+  ctx.closePath();
+  ctx.fillStyle=g; ctx.fill();
+  // 윗면 빛
+  ctx.beginPath();
+  ctx.moveTo(r.x-r.w*0.22, r.y-r.h*0.7);
+  ctx.quadraticCurveTo(r.x, r.y-r.h*0.95, r.x+r.w*0.22, r.y-r.h*0.62);
+  ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.07)'; ctx.stroke();
+}
+
+// ── 빛줄기 ──
+function makeRays(){
+  rays = [];
+  const n = 5;
+  for(let i=0;i<n;i++){
+    rays.push({ x:(i+0.5)/n*W + rand(-60,60), w:rand(70,150),
+                angle:rand(-0.12,0.12), phase:rand(0,TAU), a:rand(0.05,0.12) });
+  }
+}
+function drawRay(r){
+  const flick = (0.7 + 0.3*Math.sin(time*0.4 + r.phase)) * (reduceMotion?0.85:1);
+  const drift = Math.sin(time*0.15 + r.phase) * 30 * M;
+  const x = r.x + drift;
+  const topW = r.w, botW = r.w*2.4;
+  const skew = Math.tan(r.angle)*H + flow*1.4;
+  const g = ctx.createLinearGradient(x, 0, x, H);
+  g.addColorStop(0, `rgba(224,255,250,${r.a*flick*effLight()})`);
+  g.addColorStop(0.7, `rgba(200,245,240,${r.a*0.3*flick*effLight()})`);
+  g.addColorStop(1, 'rgba(200,245,240,0)');
+  ctx.globalCompositeOperation='lighter';
+  ctx.beginPath();
+  ctx.moveTo(x-topW/2, 0);
+  ctx.lineTo(x+topW/2, 0);
+  ctx.lineTo(x+skew+botW/2, H);
+  ctx.lineTo(x+skew-botW/2, H);
+  ctx.closePath();
+  ctx.fillStyle=g; ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+}
+
+// ── 플랑크톤 ──
+function makePlankton(n){
+  plankton = [];
+  for(let i=0;i<n;i++)
+    plankton.push({ x:rand(0,W), y:rand(0,H), z:rand(0.2,1),
+                    phase:rand(0,TAU), r:rand(0.6,1.8) });
+}
+function updatePlankton(dt){
+  for(const p of plankton){
+    p.x += Math.sin(time*0.3 + p.phase)*4*dt*M + p.z*3*dt + flow*dt;
+    p.y += Math.cos(time*0.2 + p.phase)*3*dt*M;
+    if(p.x>W+5)p.x=-5; if(p.x<-5)p.x=W+5;
+    if(p.y>H+5)p.y=-5; if(p.y<-5)p.y=H+5;
+  }
+}
+
+// ── 기포 ──
+function makeBubble(x,y,r){
+  return { x, y, r, phase:rand(0,TAU), v:rand(20,45) };
+}
+function updateBubbles(dt){
+  for(let i=bubbles.length-1;i>=0;i--){
+    const b=bubbles[i];
+    b.y -= b.v*dt;
+    b.x += Math.sin(time*3 + b.phase)*8*dt*M + flow*0.7*dt;
+    b.r += 0.12*dt;
+    if(b.y < H*0.06 + b.r){ bubbles.splice(i,1); }
+  }
+  // 바닥 분출구에서 가끔 발생
+  for(const e of emitters){
+    e.t -= dt;
+    if(e.t<=0){ bubbles.push(makeBubble(e.x+rand(-6,6), sandTop-2, rand(1.2,3))); e.t=rand(0.5,2.4); }
+  }
+}
+function drawBubble(b){
+  ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,TAU);
+  ctx.fillStyle='rgba(220,250,248,.10)'; ctx.fill();
+  ctx.lineWidth=1; ctx.strokeStyle='rgba(230,255,252,.4)'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(b.x-b.r*0.3, b.y-b.r*0.3, b.r*0.28,0,TAU);
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.fill();
+}
+
+// ── 먹이 & 물결 ──
+function dropFood(x,y){
+  const n = Math.round(rand(2,4));
+  for(let i=0;i<n;i++)
+    food.push({ x:x+rand(-12,12), y:y+rand(-8,8),
+                vx:rand(-6,6), vy:rand(6,16), phase:rand(0,TAU), life:14 });
+  ripples.push({ x, y, r:4, a:0.5 });
+  hideHint();
+}
+function updateFood(dt){
+  for(let i=food.length-1;i>=0;i--){
+    const p=food[i];
+    p.vy += 8*dt; p.vy=Math.min(p.vy,26);
+    p.x += p.vx*dt + Math.sin(time*2+p.phase)*5*dt;
+    p.y += p.vy*dt;
+    p.life -= dt;
+    if(p.y > sandTop-2){ p.y=sandTop-2; p.vy=0; p.vx*=0.6; }
+    if(p.life<=0) food.splice(i,1);
+  }
+  for(let i=ripples.length-1;i>=0;i--){
+    const r=ripples[i]; r.r += 90*dt; r.a -= dt*0.9;
+    if(r.a<=0) ripples.splice(i,1);
+  }
+}
+function drawFood(p){
+  ctx.globalAlpha = clamp(p.life/3,0,1);
+  ctx.beginPath(); ctx.arc(p.x,p.y,2.1,0,TAU);
+  ctx.fillStyle='#d99a5b'; ctx.fill();
+  ctx.globalAlpha=1;
+}
+function drawRipple(r){
+  ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,TAU);
+  ctx.lineWidth=1.4; ctx.strokeStyle=`rgba(220,250,248,${r.a})`; ctx.stroke();
+}
+
+// ── 배경 ──
+function drawBackground(){
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,    hexLerp(TANK.top,  STREAM.top,  modeT));
+  g.addColorStop(0.45, hexLerp(TANK.mid,  STREAM.mid,  modeT));
+  g.addColorStop(1,    hexLerp(TANK.deep, STREAM.deep, modeT));
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+function drawSand(){
+  const g = ctx.createLinearGradient(0,sandTop,0,H);
+  g.addColorStop(0, hexLerp('#cab389','#aeb4a8',modeT));
+  g.addColorStop(1, hexLerp('#a3916b','#7f8278',modeT));
+  ctx.beginPath();
+  ctx.moveTo(0,H); ctx.lineTo(0, sandTop+6);
+  const steps=10;
+  for(let i=0;i<=steps;i++){
+    const x=i/steps*W;
+    const y=sandTop + Math.sin(i*1.3 + 0.5)*5 - 2;
+    ctx.lineTo(x,y);
+  }
+  ctx.lineTo(W,H); ctx.closePath();
+  ctx.fillStyle=g; ctx.fill();
+  // 모래 위 일렁이는 빛
+  ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<5;i++){
+    const cx = ((time*12*M + i*W/5) % (W+200)) - 100;
+    const cy = sandTop + 14 + i*6;
+    const rg = ctx.createRadialGradient(cx,cy,0,cx,cy,90);
+    rg.addColorStop(0,`rgba(255,250,225,${0.05*effLight()})`);
+    rg.addColorStop(1,'rgba(255,250,225,0)');
+    ctx.fillStyle=rg; ctx.fillRect(cx-90,cy-40,180,80);
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+function drawVignette(){
+  const g = ctx.createRadialGradient(W/2,H*0.45,Math.min(W,H)*0.3, W/2,H*0.5,Math.max(W,H)*0.75);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(2,18,26,.42)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  급류(Hillstream) 환경 + 힐스트림 로치
+// ─────────────────────────────────────────────────────────────
+function effLight(){ return cfg.light * lerp(1, 1.45, modeT); }   // 급류는 더 밝게
+
+function buildStream(){
+  streamRocks=[]; pebbles=[]; mosses=[]; streaks=[];
+  // 매끈한 강돌(boulder)
+  const nB = Math.round(W/220)+4;
+  for(let i=0;i<nB;i++){
+    const rx = rand(40,130), ry = rx*rand(0.42,0.66);
+    streamRocks.push({
+      x: rand(0,W), y: rand(sandTop-ry*0.25, H-ry*0.2),
+      rx, ry, tone: Math.random(), wob: rand(0,TAU),
+      bio: Array.from({length:Math.round(rand(2,5))}, ()=>(
+        {dx:rand(-rx*0.5,rx*0.5), dy:rand(-ry*0.6,-ry*0.05), r:rand(ry*0.18,ry*0.42)}))
+    });
+  }
+  streamRocks.sort((a,b)=>a.y-b.y);   // 먼 것(위쪽) 먼저
+  // 자갈 바닥
+  const nP = Math.round(W/14);
+  for(let i=0;i<nP;i++)
+    pebbles.push({ x:rand(0,W), y:rand(sandTop+2,H-3), r:rand(3,9),
+                   e:rand(0.5,0.8), tone:Math.random(), a:rand(0.55,1) });
+  // 바위 위 이끼
+  for(const r of streamRocks) if(Math.random()<0.55)
+    mosses.push({ x:r.x+rand(-r.rx*0.4,r.rx*0.4), y:r.y-r.ry*0.66+rand(-4,4),
+                  n:Math.round(rand(7,13)), s:rand(6,12), phase:rand(0,TAU) });
+  // 물살 줄기
+  for(let i=0;i<9;i++)
+    streaks.push({ y:rand(H*0.05, sandTop*0.95), len:rand(50,120), off:rand(0,W) });
+  // 로치
+  loaches=[];
+  const nL = clamp(Math.round(W/260)+4, 5, 10);
+  for(let i=0;i<nL;i++) loaches.push(makeLoach());
+}
+
+function drawBoulder(r,a){
+  ctx.globalAlpha=a;
+  const g=ctx.createLinearGradient(r.x, r.y-r.ry, r.x, r.y+r.ry);
+  g.addColorStop(0, r.tone<0.5?'#90999f':'#9b9489');
+  g.addColorStop(1, r.tone<0.5?'#3a444c':'#454139');
+  ctx.beginPath();
+  const k=10;
+  for(let i=0;i<=k;i++){ const th=i/k*TAU;
+    const rr=1+Math.sin(th*3+r.wob)*0.06+Math.sin(th*5-r.wob)*0.03;
+    const px=r.x+Math.cos(th)*r.rx*rr, py=r.y+Math.sin(th)*r.ry*rr;
+    i?ctx.lineTo(px,py):ctx.moveTo(px,py); }
+  ctx.closePath(); ctx.fillStyle=g; ctx.fill();
+  // 윗면 광택
+  ctx.beginPath(); ctx.ellipse(r.x-r.rx*0.18, r.y-r.ry*0.42, r.rx*0.42, r.ry*0.2, -0.3,0,TAU);
+  ctx.fillStyle='rgba(255,255,255,.10)'; ctx.fill();
+  // 생물막(biofilm) — 빛 받는 윗부분의 녹갈색
+  for(const b of r.bio){ ctx.beginPath(); ctx.ellipse(r.x+b.dx, r.y+b.dy, b.r, b.r*0.6, 0,0,TAU);
+    ctx.fillStyle=`rgba(98,122,64,${0.2*effLight()})`; ctx.fill(); }
+  ctx.globalAlpha=1;
+}
+function drawPebbles(a){
+  for(const p of pebbles){
+    ctx.globalAlpha=a*p.a;
+    ctx.beginPath(); ctx.ellipse(p.x,p.y,p.r,p.r*p.e,0,0,TAU);
+    ctx.fillStyle = p.tone<0.5?'#8a8a7c':'#9a8e76'; ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+function drawMoss(m,a){
+  ctx.globalAlpha=a*0.9; ctx.strokeStyle='#3f7a44'; ctx.lineWidth=1.4; ctx.lineCap='round';
+  for(let i=0;i<m.n;i++){
+    const ix=m.x+(i-m.n/2)*1.8;
+    const sw=Math.sin(time*1.2+m.phase+i)*2*M;
+    ctx.beginPath(); ctx.moveTo(ix,m.y);
+    ctx.quadraticCurveTo(ix+sw*0.5, m.y-m.s*0.6, ix+sw, m.y-m.s);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+function drawFlowStreaks(){
+  if(modeT<0.05) return;
+  ctx.globalCompositeOperation='lighter';
+  ctx.lineWidth=1; ctx.lineCap='round';
+  for(const s of streaks){
+    const x=((time*flow*1.3 + s.off) % (W+200))-100;
+    ctx.strokeStyle=`rgba(220,255,250,${0.06*modeT})`;
+    ctx.beginPath(); ctx.moveTo(x,s.y); ctx.lineTo(x+s.len, s.y+s.len*0.04); ctx.stroke();
+  }
+  ctx.globalCompositeOperation='source-over';
+}
+
+// ── 힐스트림 로치 (Sewellia 등 — 위에서 본 디스크형 몸 + 망상 무늬) ──
+// 색 변이(morph): 실제 사진 기반
+const MORPHS=[
+  {key:'gold',     base:'#49441f', cell:'#ccb86c', cell2:'#bba75d', fin:'rgba(150,140,84,.5)',  finBar:'rgba(46,42,20,.55)', accent:null},      // 클래식 금빛
+  {key:'contrast', base:'#262419', cell:'#e4dec9', cell2:'#d0c9b2', fin:'rgba(150,148,130,.5)', finBar:'rgba(20,19,14,.6)',  accent:null},      // 흑백 고대비
+  {key:'purplefin',base:'#444a25', cell:'#a8ae66', cell2:'#969d58', fin:'rgba(150,152,92,.5)',  finBar:'rgba(36,40,18,.5)',  accent:'#b84fc6'}, // 보라 지느러미
+  {key:'bluefin',  base:'#3e4a2d', cell:'#9fae68', cell2:'#8fa05c', fin:'rgba(150,160,98,.5)',  finBar:'rgba(30,40,22,.5)',  accent:'#43c6cd'}, // 청록 지느러미
+  {key:'redtail',  base:'#5c5c51', cell:'#909084', cell2:'#7e7e72', fin:'rgba(140,140,126,.5)', finBar:'rgba(40,40,32,.5)',  accent:'#d63a22'}, // 빨간 등줄/꼬리
+];
+const MORPH_W=[5,3,2,2,1];
+function pickMorph(){ const tot=MORPH_W.reduce((a,b)=>a+b,0); let r=Math.random()*tot;
+  for(let i=0;i<MORPHS.length;i++){ if((r-=MORPH_W[i])<=0) return MORPHS[i]; } return MORPHS[0]; }
+function hexToRgba(h,a){ const c=hx(h); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+function smooth(t){ t=clamp(t,0,1); return t*t*(3-2*t); }
+function shade(hex,f){ const c=hx(hex);
+  return `rgb(${clamp(Math.round(c[0]*f),0,255)},${clamp(Math.round(c[1]*f),0,255)},${clamp(Math.round(c[2]*f),0,255)})`; }
+function finCol(m){ return hexToRgba(m.cell,.42); }
+
+// 반폭 프로필(×L): 가우시안 원반(앞쪽 넓음) + 짧고 두꺼운 꼬리자루 (매끈)
+function hw(xn){
+  const disc = Math.exp(-Math.pow((xn-0.14)/0.32,2)) * 0.42;
+  let w = disc;
+  if(xn < -0.02){ const k=smooth((-0.02-xn)/0.20); w = lerp(disc, 0.105, k); }
+  if(xn < -0.22){ const k=smooth((-0.22-xn)/0.10); w = lerp(0.105, 0.08, k); }
+  if(xn > 0.42){ w = Math.min(w, 0.42*smooth((0.52-xn)/0.10)); }   // 둥근 앞코
+  return Math.max(0,w);
+}
+function bodyOutline(c,L){
+  const N=48; c.beginPath();
+  for(let i=0;i<=N;i++){ const xn=lerp(0.50,-0.32,i/N); c[i?'lineTo':'moveTo'](xn*L,-hw(xn)*L); }
+  for(let i=N;i>=0;i--){ const xn=lerp(0.50,-0.32,i/N); c.lineTo(xn*L, hw(xn)*L); }
+  c.closePath();
+}
+// 가장자리 지느러미 살(짧은 막대) — 원반 모서리 따라
+function drawRimBars(c,L,m){
+  const N=64; c.lineWidth=Math.max(0.5,L*0.006); c.lineCap='round';
+  for(const side of [-1,1]) for(let i=0;i<=N;i++){
+    const xn=lerp(0.42,-0.18,i/N); const w=hw(xn)*L; if(w<L*0.14) continue;
+    const x=xn*L, y=side*w;
+    c.strokeStyle = (i%2===0)? m.finBar : 'rgba(248,243,224,.10)';
+    c.beginPath(); c.moveTo(x,y); c.lineTo(x, y - side*L*0.035); c.stroke();
+  }
+}
+function drawCaudal(c,L,m,acc){              // 꼬리: 가로 줄무늬 부채
+  c.save(); c.translate(-0.30*L,0);
+  const rad=0.20*L, a0=Math.PI-0.62, a1=Math.PI+0.62;
+  c.beginPath(); c.moveTo(0,0); c.arc(0,0,rad,a0,a1); c.closePath();
+  c.fillStyle = acc?hexToRgba(acc,0.6):finCol(m); c.fill();
+  c.strokeStyle=m.finBar; c.lineWidth=Math.max(1,rad*0.07);
+  for(let i=1;i<=4;i++){ c.beginPath(); c.arc(0,0,rad*i/4.5,a0,a1); c.stroke(); }
+  c.lineWidth=Math.max(0.6,rad*0.025);
+  for(let i=0;i<=5;i++){ const a=a0+(a1-a0)*i/5; c.beginPath(); c.moveTo(0,0); c.lineTo(rad*Math.cos(a),rad*Math.sin(a)); c.stroke(); }
+  c.restore();
+}
+// 로치 한 마리의 전체 모습 (앞=+x, 휘어짐 없음)
+function drawLoachArt(c, lf){
+  const L=lf.L, m=lf.morph, acc=m.accent||null;
+  drawCaudal(c,L,m,(m.key==='redtail'||m.key==='purplefin'||m.key==='bluefin')?acc:null);
+
+  bodyOutline(c,L); c.fillStyle=m.base; c.fill();                  // 어두운 채널색 = 그물선
+
+  c.save(); bodyOutline(c,L); c.clip();                            // 촘촘한 밝은 셀 → 틈이 미로선
+  for(const cl of lf.cells){
+    c.save(); c.translate(cl.x,cl.y); c.rotate(cl.rot);
+    c.beginPath(); c.ellipse(0,0,cl.rx,cl.ry,0,0,TAU);
+    c.fillStyle = shade(m.cell, cl.v); c.fill(); c.restore();
+  }
+  if(acc && m.key!=='redtail'){                                    // 보라/청록: 가장자리 발색
+    c.lineWidth=L*0.10; c.strokeStyle=hexToRgba(acc,0.26); bodyOutline(c,L); c.stroke();
+  }
+  if(m.key==='redtail'){                                           // 빨간꼬리: 등~꼬리 빨간 줄
+    c.strokeStyle=hexToRgba(acc,0.85); c.lineWidth=L*0.05; c.lineCap='round';
+    c.beginPath(); c.moveTo(0.14*L,0); c.lineTo(-0.30*L,0); c.stroke();
+  }
+  c.restore();
+
+  c.save(); bodyOutline(c,L); c.clip(); drawRimBars(c,L,m); c.restore();
+  bodyOutline(c,L); c.lineWidth=Math.max(0.8,L*0.012); c.strokeStyle='rgba(252,247,232,.15)'; c.stroke();
+
+  const dy=(acc?0.05:0.04)*L;                                      // 등지느러미: 작은 줄무늬 능선
+  c.save();
+  c.beginPath(); c.ellipse(-0.08*L,0,0.12*L,dy,0,0,TAU);
+  c.fillStyle = acc?hexToRgba(acc,0.5):'rgba(58,54,30,.4)'; c.fill();
+  c.strokeStyle=m.finBar; c.lineWidth=Math.max(0.5,L*0.008);
+  for(let i=0;i<5;i++){ const px=(-0.155+i*0.038)*L; c.beginPath(); c.moveTo(px,-dy*0.85); c.lineTo(px,dy*0.85); c.stroke(); }
+  c.restore();
+
+  for(const s of [1,-1]){                                          // 눈
+    c.beginPath(); c.arc(0.30*L,s*0.09*L,0.022*L,0,TAU); c.fillStyle='#15140e'; c.fill();
+    c.beginPath(); c.arc(0.31*L,s*0.083*L,0.008*L,0,TAU); c.fillStyle='rgba(255,255,255,.85)'; c.fill();
+  }
+}
+// 오프스크린에 한 번만 렌더링 → 매 프레임 drawImage (고정밀 무늬도 저비용)
+function buildLoachSprite(lf){
+  const L=lf.L, pad=6;
+  const cw=Math.ceil((L*0.58+pad)*2), ch=Math.ceil((L*0.46+pad)*2);
+  const r=Math.min(window.devicePixelRatio||1,2);
+  const cnv=document.createElement('canvas');
+  cnv.width=cw*r; cnv.height=ch*r;
+  const c=cnv.getContext('2d');
+  c.scale(r,r); c.translate(cw/2,ch/2); c.lineJoin='round';
+  drawLoachArt(c,lf);
+  lf.sprite=cnv; lf.sprW=cw; lf.sprH=ch;
+}
+function makeLoach(){
+  const L=rand(48,82);
+  const lf={
+    L, Wd:L*0.6, morph:pickMorph(),
+    x:rand(W*0.1,W*0.9), y:rand(sandTop-6,H-10),
+    heading:Math.PI+rand(-0.3,0.3), vx:0, vy:0,
+    state:'graze', timer:rand(1,5), tx:0, ty:0,
+    phase:rand(0,TAU), grip:1, nibble:0, z:rand(0.62,1),
+    cells:[], sprite:null, sprW:0, sprH:0,
+  };
+  // 망상 무늬용 셀(촘촘한 지터드 그리드) — 단일 밝기색 + 미세 지터 → 얇은 미로선
+  const step=L*0.036, cells=[];
+  for(let x=-0.30*L; x<=0.48*L; x+=step){
+    const half=hw(x/L)*L; if(half<=1.2) continue;
+    for(let y=-half; y<=half; y+=step){
+      const jx=x+rand(-step*0.22,step*0.22), jy=y+rand(-step*0.22,step*0.22);
+      if(Math.abs(jy) > hw(jx/L)*L*0.95) continue;
+      const tail=jx<-0.08*L;                                       // 꼬리 쪽=가로 줄
+      cells.push({ x:jx, y:jy, rx: tail?step*0.8:step*0.5, ry: tail?step*0.32:step*0.5,
+                   rot: tail?0:rand(-0.7,0.7), v:rand(0.86,1.12) });
+    }
+  }
+  lf.cells=cells;
+  buildLoachSprite(lf);
+  return lf;
+}
+function updateLoach(lf,dt){
+  // 바닥의 먹이를 향해 기어가 뜯어먹기
+  let target=null,best=1e9;
+  for(const p of food){ if(p.y>sandTop-30){ const d=(p.x-lf.x)**2+(p.y-lf.y)**2; if(d<best){best=d;target=p;} } }
+  const seesFood = target && best<260*260;
+  if(seesFood){ lf.state='graze'; lf.tx=target.x; lf.ty=Math.min(target.y,H-10);
+    if(best<(lf.L*0.4)**2){ const i=food.indexOf(target); if(i>=0)food.splice(i,1); lf.nibble=0.5; lf.timer=rand(1,3);} }
+
+  lf.timer-=dt;
+  if(!seesFood && lf.timer<=0){
+    if(lf.state==='graze' && Math.random()<0.45){       // 다른 바위로 휙
+      lf.state='dart';
+      lf.tx=clamp(lf.x+rand(-1,1)*W*0.22, 40, W-40);
+      lf.ty=clamp(rand(sandTop-16,H-12), sandTop-26, H-10);
+      lf.timer=rand(0.4,0.9);
+    } else {                                            // 제자리에서 천천히 뜯기
+      lf.state='graze';
+      lf.tx=clamp(lf.x+rand(-44,44), 30, W-30);
+      lf.ty=clamp(lf.y+rand(-12,12), sandTop-26, H-10);
+      lf.timer=rand(2,5);
+    }
+  }
+  const dx=lf.tx-lf.x, dy=lf.ty-lf.y, dist=Math.hypot(dx,dy)||1;
+  const cruise=lf.state==='dart'?92:11;
+  const want=Math.min(cruise, dist*4);
+  const tvx=dx/dist*want, tvy=dy/dist*want;
+  const turn=Math.min(1,(lf.state==='dart'?3:1.6)*dt);
+  lf.vx+=(tvx-lf.vx)*turn; lf.vy+=(tvy-lf.vy)*turn;
+  lf.x+=lf.vx*dt; lf.y+=lf.vy*dt;
+  lf.x=clamp(lf.x,20,W-20); lf.y=clamp(lf.y, sandTop-30, H-8);
+  if(lf.state==='dart' && dist<6){ lf.state='graze'; lf.timer=rand(2,5); }
+
+  const sp=Math.hypot(lf.vx,lf.vy);
+  let desired;
+  if(sp>14){ desired=Math.atan2(lf.vy,lf.vx); lf.grip+=(0.3-lf.grip)*Math.min(1,dt*4); }      // 이동 방향
+  else { desired=Math.PI+Math.sin(time*0.3+lf.phase)*0.22; lf.grip+=(1-lf.grip)*Math.min(1,dt*3); } // 물살 거슬러 정지
+  let dh=((desired-lf.heading+Math.PI*3)%TAU)-Math.PI;
+  lf.heading+=dh*Math.min(1,dt*(sp>14?6:2));
+  lf.phase+=dt*(2+sp*0.06);
+  lf.nibble=Math.max(0,lf.nibble-dt);
+}
+function drawLoach(lf){
+  const sc=lerp(0.7,1.1,lf.z);
+  const nib=lf.nibble>0?Math.sin(time*30)*1.1:0;                 // 뜯어먹을 때 미세 진동
+  const wob=Math.sin(time*2+lf.phase)*(lf.state==='dart'?0.05:0.012); // 살짝 살아있는 흔들림
+  ctx.save();
+  ctx.globalAlpha=modeT*lerp(0.55,1,lf.z);
+  ctx.translate(lf.x, lf.y+nib);
+  ctx.rotate(lf.heading+wob);
+  ctx.scale(sc,sc);
+  if(lf.sprite) ctx.drawImage(lf.sprite, -lf.sprW/2, -lf.sprH/2, lf.sprW, lf.sprH);
+  ctx.restore();
+}
+
+// ── 메인 루프 ──
+let last = performance.now();
+function frame(now){
+  let dt = (now-last)/1000; last=now;
+  dt = Math.min(dt, 0.05);
+  time += dt;
+
+  // 길게 누르기 진행 → 임계 도달 시 급류 토글
+  if(press.active && !press.fired){
+    const held = now - press.t0;
+    press.ring = clamp(held/HOLD_MS, 0, 1);
+    if(held >= HOLD_MS){ press.fired=true; setHillstream(!hillstream); if(navigator.vibrate) navigator.vibrate(30); }
+  }
+
+  // 모드 전이 + 물살 세기
+  targetMode = hillstream ? 1 : 0;
+  modeT += (targetMode-modeT)*Math.min(1, dt*1.8);
+  const et = modeT*modeT*(3-2*modeT);
+  flow = FLOW_MAX*et*M;
+
+  drawBackground();
+  for(const r of rays) drawRay(r);
+  drawFlowStreaks();
+  for(const p of plankton){ if(p.z<0.6){ ctx.globalAlpha=p.z*0.5*lerp(1,0.7,modeT); dot(p); } }
+  ctx.globalAlpha=1;
+
+  drawSand();
+  for(const r of rocks){ ctx.globalAlpha=1-modeT; drawRock(r); }
+  ctx.globalAlpha=1;
+  if(modeT>0.01){                      // 급류 바닥: 자갈 → 강돌 → 이끼
+    drawPebbles(modeT);
+    for(const r of streamRocks) drawBoulder(r, modeT);
+    for(const m of mosses) drawMoss(m, modeT);
+  }
+  for(const pl of plants){ if(!pl.front) drawPlant(pl); }
+
+  updatePlankton(dt);
+  for(const p of plankton){ if(p.z>=0.6){ ctx.globalAlpha=p.z*0.5*lerp(1,0.7,modeT); dot(p); } }
+  ctx.globalAlpha=1;
+
+  // 수조 물고기 (급류에선 떠밀려 사라짐)
+  if(modeT < 0.985){
+    fish.sort((a,b)=>a.z-b.z);
+    for(const f of fish){ updateFish(f,dt); drawFish(f); }
+  }
+  // 힐스트림 로치
+  if(modeT > 0.01){ for(const lf of loaches){ updateLoach(lf,dt); drawLoach(lf); } }
+
+  updateFood(dt);
+  for(const p of food) drawFood(p);
+  for(const r of ripples) drawRipple(r);
+
+  updateBubbles(dt);
+  for(const b of bubbles) drawBubble(b);
+
+  for(const pl of plants){ if(pl.front) drawPlant(pl); }
+
+  // 길게 누르는 동안 차오르는 링
+  if(press.active && !press.fired && press.ring>0.04){
+    ctx.save(); ctx.translate(press.x, press.y);
+    ctx.lineWidth=2; ctx.lineCap='round';
+    ctx.strokeStyle='rgba(220,255,250,.14)';
+    ctx.beginPath(); ctx.arc(0,0,18,0,TAU); ctx.stroke();
+    ctx.strokeStyle=`rgba(225,255,250,${0.55*press.ring})`;
+    ctx.beginPath(); ctx.arc(0,0,18,-Math.PI/2,-Math.PI/2+press.ring*TAU); ctx.stroke();
+    ctx.restore();
+  }
+
+  drawVignette();
+  requestAnimationFrame(frame);
+}
+function dot(p){
+  ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,TAU);
+  ctx.fillStyle='rgba(225,245,240,.5)'; ctx.fill();
+}
+
+// ── 리사이즈 ──
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W*DPR; canvas.height = H*DPR;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  sandH = H*0.16; sandTop = H - sandH;
+
+  makePlants(); makeRocks(); makeRays(); buildStream();
+  makePlankton(Math.round(W*H/26000));
+  emitters = [
+    { x:W*0.22, t:rand(0,2) },
+    { x:W*0.7,  t:rand(0,2) },
+  ];
+  // 물고기 위치 보정 / 개수 맞추기
+  if(fish.length===0) syncFish();
+  else for(const f of fish){ f.x=clamp(f.x,10,W-10); f.y=clamp(f.y,H*0.1,sandTop-f.Hh*0.6); }
+}
+
+function syncFish(){
+  while(fish.length < cfg.fishCount) fish.push(makeFish());
+  while(fish.length > cfg.fishCount){
+    // 가장 멀리 있는 개체부터 제거
+    let idx=0,min=2; fish.forEach((f,i)=>{ if(f.z<min){min=f.z;idx=i;} });
+    fish.splice(idx,1);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  잔잔한 물소리 (Web Audio · 합성)
+// ─────────────────────────────────────────────────────────────
+let audio=null, soundOn=false;
+function initAudio(){
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) return null;
+  const ac = new AC();
+
+  // 브라운 노이즈 버퍼
+  const buf = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate);
+  const data = buf.getChannelData(0);
+  let lastV=0;
+  for(let i=0;i<data.length;i++){
+    const white = Math.random()*2-1;
+    lastV = (lastV + 0.02*white)/1.02;
+    data[i] = lastV*3.2;
+  }
+  const src = ac.createBufferSource(); src.buffer=buf; src.loop=true;
+
+  const lp = ac.createBiquadFilter(); lp.type='lowpass';
+  lp.frequency.value=480; lp.Q.value=0.6;
+
+  const gain = ac.createGain(); gain.gain.value=0;
+
+  // 필터를 천천히 흔드는 LFO
+  const lfo = ac.createOscillator(); lfo.frequency.value=0.07;
+  const lfoG = ac.createGain(); lfoG.gain.value=160;
+  lfo.connect(lfoG).connect(lp.frequency);
+
+  src.connect(lp).connect(gain).connect(ac.destination);
+  src.start(); lfo.start();
+
+  // 가끔 부드러운 물방울 소리
+  function blip(){
+    if(!soundOn){ schedule(); return; }
+    const o=ac.createOscillator(), g=ac.createGain();
+    const f0=rand(500,900);
+    o.frequency.setValueAtTime(f0, ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f0*0.6, ac.currentTime+0.12);
+    g.gain.setValueAtTime(0, ac.currentTime);
+    g.gain.linearRampToValueAtTime(0.05, ac.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.3);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+0.32);
+    schedule();
+  }
+  function schedule(){ setTimeout(blip, rand(2500,6000)); }
+  schedule();
+
+  return { ac, gain };
+}
+function toggleSound(){
+  if(!audio){ audio = initAudio(); if(!audio) return; }
+  if(audio.ac.state==='suspended') audio.ac.resume();
+  soundOn = !soundOn;
+  const g = audio.gain.gain;
+  g.cancelScheduledValues(audio.ac.currentTime);
+  g.linearRampToValueAtTime(soundOn?0.09:0, audio.ac.currentTime + (soundOn?1.2:0.6));
+  const btn=document.getElementById('bSnd');
+  btn.classList.toggle('on',soundOn);
+  btn.setAttribute('aria-pressed',String(soundOn));
+  document.getElementById('sndTxt').textContent = soundOn?'물소리 끄기':'물소리 켜기';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  UI / 인터랙션
+// ─────────────────────────────────────────────────────────────
+function hideHint(){ document.getElementById('hint').classList.add('dim'); }
+
+canvas.addEventListener('pointerdown', e=>{
+  press.active=true; press.fired=false; press.moved=false;
+  press.x=e.clientX; press.y=e.clientY; press.t0=performance.now(); press.ring=0;
+  if(canvas.setPointerCapture) try{ canvas.setPointerCapture(e.pointerId); }catch(_){}
+});
+canvas.addEventListener('pointermove', e=>{
+  if(press.active && Math.hypot(e.clientX-press.x, e.clientY-press.y) > MOVE_TOL){
+    press.moved=true; press.active=false; press.ring=0;
+  }
+});
+function endPress(){
+  if(!press.active) return;
+  press.active=false;
+  if(!press.fired && !press.moved) dropFood(press.x, press.y);   // 짧은 탭 → 먹이
+  press.ring=0;
+}
+canvas.addEventListener('pointerup', endPress);
+canvas.addEventListener('pointercancel', ()=>{ press.active=false; press.ring=0; });
+// 키보드 사용자도 먹이 주기 (스페이스)
+window.addEventListener('keydown', e=>{
+  if(e.code==='Space' && e.target===document.body){
+    e.preventDefault();
+    dropFood(rand(W*0.3,W*0.7), rand(H*0.2,H*0.4));
+  }
+});
+
+// 이스터에그: 키보드로 'loach' 입력 → 급류 모드 토글, Esc로 복귀
+let kbuf='';
+function setHillstream(on){
+  hillstream = on;
+  const t=document.getElementById('toast');
+  t.innerHTML = on
+    ? '계곡 급류 속으로<small>Hillstream loach · 화면을 누르면 바위 위에 먹이를 줘요</small>'
+    : '잔잔한 수조로 돌아가기<small>&nbsp;</small>';
+  t.classList.add('show');
+  clearTimeout(window.__toast);
+  window.__toast=setTimeout(()=>t.classList.remove('show'), 2800);
+}
+window.addEventListener('keydown', e=>{
+  if(e.key && e.key.length===1 && /[a-z]/i.test(e.key)){
+    kbuf=(kbuf+e.key.toLowerCase()).slice(-10);
+    if(kbuf.endsWith('loach')){ setHillstream(!hillstream); kbuf=''; }
+  } else if(e.code==='Escape' && hillstream){ setHillstream(false); }
+});
+
+const panel=document.getElementById('panel'), toggle=document.getElementById('toggle');
+toggle.addEventListener('click', ()=>{
+  const open = panel.classList.toggle('open');
+  toggle.setAttribute('aria-expanded',String(open));
+});
+
+const sFish=document.getElementById('sFish'), vFish=document.getElementById('vFish');
+sFish.addEventListener('input', ()=>{
+  cfg.fishCount = +sFish.value; vFish.textContent = sFish.value; syncFish();
+});
+const sSpeed=document.getElementById('sSpeed'), vSpeed=document.getElementById('vSpeed');
+sSpeed.addEventListener('input', ()=>{
+  cfg.speed = +sSpeed.value/10; vSpeed.textContent = cfg.speed.toFixed(1)+'×';
+});
+const sLight=document.getElementById('sLight'), vLight=document.getElementById('vLight');
+sLight.addEventListener('input', ()=>{
+  cfg.light = +sLight.value/10;
+  vLight.textContent = cfg.light<0.5?'은은': cfg.light<1.1?'보통':'밝음';
+});
+document.getElementById('bSnd').addEventListener('click', toggleSound);
+
+// 제목/힌트 자동 페이드
+setTimeout(()=>document.getElementById('title').classList.add('dim'), 5500);
+setTimeout(hideHint, 9000);
+window.addEventListener('pointermove', ()=>{
+  document.getElementById('title').classList.remove('dim');
+  clearTimeout(window.__t);
+  window.__t=setTimeout(()=>document.getElementById('title').classList.add('dim'),3500);
+});
+
+// ── 시작 ──
+window.addEventListener('resize', resize);
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
