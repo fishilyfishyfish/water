@@ -1028,22 +1028,6 @@ function initAudio(){
   src.connect(lp).connect(gain).connect(ac.destination);
   src.start(); lfo.start();
 
-  // 가끔 부드러운 물방울 소리
-  function blip(){
-    if(!soundOn){ schedule(); return; }
-    const o=ac.createOscillator(), g=ac.createGain();
-    const f0=rand(500,900);
-    o.frequency.setValueAtTime(f0, ac.currentTime);
-    o.frequency.exponentialRampToValueAtTime(f0*0.6, ac.currentTime+0.12);
-    g.gain.setValueAtTime(0, ac.currentTime);
-    g.gain.linearRampToValueAtTime(0.05, ac.currentTime+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime+0.3);
-    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+0.32);
-    schedule();
-  }
-  function schedule(){ setTimeout(blip, rand(2500,6000)); }
-  schedule();
-
   return { ac, gain };
 }
 function toggleSound(){
